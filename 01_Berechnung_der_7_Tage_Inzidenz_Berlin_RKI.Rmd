@@ -1,0 +1,201 @@
+---
+title: "Berechnung der 7-Tag-Inzidenz Berlin und RKI"
+date: 2020-10-26
+author: LAGeSo Berlin Infektionsschutz (I C 1)
+output: 
+  html_notebook:
+    theme: united
+    highlight: kate
+    toc: true
+    toc_float: 
+      collapsed: false
+---
+
+# Einleitung
+Im Folgenden wird die Berechnung der 7-Tage-Inzidenz für Berlin durch das LAGeSo und das RKI erklärt. Für die gezeigte Berechnung werden nur öffentlich zugängliche Datenquellen verwendet, damit jeder Schritt selbständig nachvollzogen werden kann. 
+
+Diese HTML-Datei (.nb.html) kann direkt in RStudio geöffnet und ausgeführt werden, um die Berechnungen mit aktuellen Daten durchzuführen.
+
+# Datumsangaben
+Jeder gemeldete Fall besitzt drei verschiedene Datumsangaben:
+
+1. Erkrankungsdatum: Dieses Datum wird durch die Gesundheitsämter erfragt und spiegelt das Datum der ersten Symptome eines Falles wieder. Mithilfe des Erkrankungsdatums kann der Ansteckungszeitpunkt genauer abgeschätzt werden. Es ist häufig bei der Erstübermittlung des Falles noch nicht vorhanden. Bei asymptomatischen Fällen gibt es kein Erkrankungsdatum und bei manchen Fällen kann das Erkrankungsdatum nicht ermittelt werden.
+2. Meldedatum: Als Meldedatum wird in der, vom Robert Koch-Institut (RKI) zur Verfügung gestellten, elektronischen Software „SurvNet\@RKI“, die in Berlin von allen Gesundheitsämtern verwendet wird, standardmäßig das aktuelle Datum bei Anlegen des Falles eingesetzt. In einigen Fällen wird dieses Datum jedoch, auf das Datum an dem das Gesundheitsamt die Meldung erhalten hat, geändert.
+3. Berichtsdatum: Das Berichtsdatum ist das Datum des Datenstandes des Lageberichts des LAGeSo. Dieses Datum kann sich vom Meldedatum unterscheiden.
+
+Eine ausführlichere Erklärung finden Sie im Info-Tab unseres [Lageberichts.](https://www.berlin.de/corona/lagebericht/desktop/corona.html#info)
+
+# Berechnung (Anleitung beginnt hier)
+## Bibliotheken laden
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(zoo)
+```
+
+## Daten laden
+
+### Berliner Fallzahlen nach Meldedatum
+Die Fallzahlen der Berliner Bezirke nach Meldedatum werden durch das LAGeSo auf dem OpenData-Portal von Berlin (https://daten.berlin.de) veröffentlicht.
+
+Link: https://daten.berlin.de/datensaetze/covid-19-berlin-verteilung-den-bezirken-gesamt%C3%BCbersicht
+
+```{r message=FALSE, warning=FALSE}
+Faelle_nach_Meldedatum_und_Bezirken_Berlin <- read.csv2(
+  "https://www.berlin.de/lageso/gesundheit/infektionsepidemiologie-infektionsschutz/corona/tabelle-bezirke-gesamtuebersicht/index.php/index/all.csv"
+  )
+```
+
+Da diese Daten auf Bezirksebene vorliegen, summieren wir die Bezirksfallzahlen auf um die Fallzahl für Berlin zu erhalten.
+```{r message=FALSE, warning=FALSE}
+Faelle_nach_Meldedatum_und_Bezirken_Berlin %>% 
+  # Datensatz von Wide nach Long umwandeln
+  pivot_longer(mitte:reinickendorf, names_to = "Bezirk", values_to = "Faelle_LAGeSo") %>%
+  # Datum parsen und umbenennen
+  mutate(Meldedatum = as.Date(datum)) %>%
+  # Zusammenfassen der Bezirke
+  group_by(Meldedatum) %>%
+  summarise(Faelle_LAGeSo = sum(Faelle_LAGeSo)) -> Faelle_nach_Meldedatum_Berlin
+```
+
+### RKI Fallzahlen
+Die Fallzahlen RKI werden als OpenData-Datensatz veröffentlicht. Dieser dient als Datenquelle für das RKI Covid-19-Dashboard.
+
+Link: https://www.arcgis.com/home/item.html?id=f10774f1c63e40168479a1feb6c7ca74
+```{r}
+RKI_Fallzahlen_in_Deutschland <- read.csv("https://www.arcgis.com/sharing/rest/content/items/f10774f1c63e40168479a1feb6c7ca74/data")
+
+# Alternative 2
+#RKI_Fallzahlen_in_Deutschland <- read.csv("https://opendata.arcgis.com/datasets/dd4580c810204019a7b8eb3e0b329dd6_0.csv")
+```
+
+Auch bei diesem Datensatz müssen wir die Fallzahlen nach Meldedatum für Berlin aufsummieren.
+```{r message=FALSE, warning=FALSE}
+RKI_Fallzahlen_in_Deutschland %>% 
+  # Nur die Fälle aus Berlin verwenden
+  filter(Bundesland == "Berlin") %>%
+  # Zusammenfassen der Bezirke
+  group_by(Meldedatum) %>%
+  summarise(Faelle_RKI = sum(AnzahlFall)) %>%
+  # Datum parsen
+  mutate(Meldedatum = as.Date(Meldedatum)) -> RKI_Faelle_nach_Meldedatum_Berlin
+```
+## Datensätze zusammenfügen
+Als nächstes fügen wir die Fallzahlen des LAGeSo und des RKI anhand des Meldedatums zusammen um sie besser vergleichen zu können.
+```{r}
+Vergleich_Faelle <- full_join(Faelle_nach_Meldedatum_Berlin, 
+                              RKI_Faelle_nach_Meldedatum_Berlin, 
+                              by = c("Meldedatum" = "Meldedatum"))
+```
+
+Mithilfe des Paketes "zoo" wird die 7-Tage-Fallzahl berechnet. Die Funktion `rollsumr` summiert dabei die Fälle mit einem gleitenden 7 Tage Fenster auf.
+```{r}
+Vergleich_Faelle %>% 
+  arrange(Meldedatum) %>%
+  mutate(
+    Faelle_7Tage_LAGeSo = zoo::rollsumr(Faelle_LAGeSo, k = 7, na.pad = TRUE),
+    Faelle_7Tage_RKI    = zoo::rollsumr(Faelle_RKI,    k = 7, na.pad = TRUE, na.rm = TRUE),
+  ) -> Vergleich_Faelle
+Vergleich_Faelle
+```
+
+
+
+
+### Vergleich der 7-Tage-Fallzahl
+```{r fig.cap="Vergleich der 7 Tage Fallzahl (Berlin rot, RKI blau)", message=FALSE, warning=FALSE}
+ggplot(Vergleich_Faelle, aes(x = Meldedatum)) +
+  geom_line(aes(y = Faelle_7Tage_LAGeSo, color = "LAGeSo"), size = 1) +
+  geom_line(aes(y = Faelle_7Tage_RKI, color = "RKI"), linetype = 2, size = 1) +
+  scale_color_manual(
+    values = c("LAGeSo" = "red", "RKI" = "blue"),
+    guide = guide_legend(title = NULL)
+  ) +
+  ylab("7-Tage Fallzahl") +
+  theme_minimal()+
+  theme(legend.position = "bottom")
+```
+**Vergleich der 7-Tage-Fallzahl des LAGeSo und des RKI**
+
+### Vergleich der täglichen Fallzahl
+```{r fig.cap="Vergleich der täglichen Fallzahl (Berlin rot, RKI blau)", message=FALSE, warning=FALSE}
+ggplot(Vergleich_Faelle, aes(x = Meldedatum)) +
+  geom_line(aes(y = Faelle_LAGeSo, color = "LAGeSo"), size = 1) +
+  geom_line(aes(y = Faelle_RKI, color = "RKI"), linetype = 2, size = 1) +
+  scale_color_manual(
+    values = c("LAGeSo" = "red", "RKI" = "blue"),
+    guide = guide_legend(title = NULL)
+  ) +
+  ylab("tägliche Fallzahl nach Meldedatum") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+**Vergleich der täglichen Fallzahl des LAGeSo und des RKI**
+
+# Erklärung
+
+
+**Vorgaben zur Übermittlung nach dem Infektionsschutzgesetz**
+
+> Gemäß §11(1) Infektionsschutzgesetz übermitteln die zuständigen Gesundheitsämter die verarbeiteten Daten zu meldepflichtigen Krankheiten und Nachweisen von Krankheitserregern, also auch Nachweise von SARS-CoV-2, spätestens am folgenden Arbeitstag nichtnamentlich an die zuständige Landesbehörde - in Berlin an das LAGeSo. Von dort müssen die Daten spätestens am folgenden Arbeitstag an das Robert Koch-Institut (RKI) übermittelt werden.
+
+Um die politischen Entscheidungsträger in Berlin zeitnah und tagesaktuell informieren zu können, ist der Datenstand vom LAGeSo auf 12:00 Uhr festgelegt. Es besteht daher die Bitte an die Berliner Gesundheitsämter, die bei Ihnen vorliegenden und verarbeiteten Meldedaten täglich bis zu diesem Zeitpunkt an das LAGeSo zu übermitteln. Die Gesundheitsämter werden zusätzlich einzeln gegen ca. 11:45 Uhr erinnert, falls von Ihnen bis dahin noch keine Datenlieferung an das LAGeSo erfolgt ist. Die an das LAGeSo übermittelten Daten werden einmal am Tag, zwischen 12:00 und 13:00 Uhr an das RKI übermittelt.
+
+Die Datengrundlage ist dadurch für alle Berichte des LAGeSo und RKI identisch. Es ist zu sehen, dass die täglichen Fallzahlen des LAGeSo und des RKI gleich sind (max. ± 1 Fall Abweichung).
+
+Da die Datengrundlage gleich ist, kann es aus 2 Gründen zu Abweichungen in der 7-Tage-Inzidenz kommen:
+
+1. Unterschiede im gewählten Intervall für die Berechnung der 7-Tage-Fallzahl
+2. Unterschiede in der Einwohner\*innenzahl für Berlin, aufgrund der Verwendung unterschiedlicher Datenquellen.
+
+## Erklärung zum 7-Tage-Intervall
+
+Bei der Berechnung der 7-Tage-Inzidenz des LAGeSo werden die Fallzahlen mit Meldedatum des aktuellen Berichtstags nicht verwendet, da diese noch nicht vollständig sind. Dieser Effekt tritt unseres Wissens nach in allen Bundesländern auf.
+
+Im Vergleich mit unseren [älteren Lageberichten](http://web.archive.org/web/*/www.berlin.de/corona/lagebericht/desktop/corona.html) sieht man, dass die nachträgliche Korrektur der 7-Tage-Fallzahl im einstelligen Bereich liegt. Die folgende Tabelle stellt dar, welche Tage (+) für das 7-Tage-Intervall benutzt werden.
+
+**Tabelle 1: Verwendete Tage für die 7-Tage-Inzidenz**
+
+|      |-7 |-6 |-5 |-4 |-3 |-2 |-1 |neuestes vorliegendes Meldedatum    |
+|------|---|---|---|---|---|---|---|-----|
+|LAGeSO|+  |+  |+  |+  |+  |+  |+  |     |
+|RKI   |   |+  |+  |+  |+  |+  |+  |+    |
+
+Das RKI berechnet die 7-Tage-Inzidenz unter Verwendung der Fallzahlen des neuesten Meldedatums, für das Daten vorliegen. Dies führt zu einer aktuelleren Inzidenz, welche jedoch stärker nachträglichen Korrekturen unterliegt. Dieser Unterschied ist sichtbar, wenn dieses Skript am frühen Abend ausgeführt wird (siehe folgende Abbildung).
+
+## Erklärung zu den Einwohner\*innenzahlen
+
+Das LAGeSo verwendet die [Einwohner\*innenregisterstatistik vom 31.12.2019](https://www.statistik-berlin-brandenburg.de/BasisZeitreiheGrafik/Bas-Einwohnerregister.asp?Ptyp=300&Sageb=12041&creg=BBB&anzwer=10) (Quelle: Amt für Statistik Berlin-Brandenburg), nach der Berlin 3.769.495 Einwohner\*innen hat. Das RKI verwendet eine Einwohner\*innenzahl von 3.669.491 für die Berechnung von Inzidenzen.
+
+$$ \frac{3.769.495}{3.669.491} = 1,027  $$
+
+Die vom RKI berichtete 7-Tage-Inzidenz ist also 2,7% höher aufgrund von Unterschieden in den verwendeten Einwohner\*innenzahlen. Dieser Unterschied ist insgesamt aber nicht relevant, wie man an der folgenden Grafik sieht.
+
+
+```{r fig.cap="Vergleich der 7-Tage-Inzidenz (Berlin rot, RKI blau)", message=FALSE, warning=FALSE}
+Vergleich_Faelle %>%
+  mutate(
+    Inzidenz_7T_LAGeSo = (Faelle_7Tage_LAGeSo/3769495)*100000,
+    Inzidenz_7T_RKI = (Faelle_7Tage_RKI/3669491)*100000
+  ) -> Vergleich_Faelle
+
+
+ggplot(Vergleich_Faelle, aes(x = Meldedatum)) +
+  geom_line(aes(y = Inzidenz_7T_LAGeSo, color = "LAGeSo"), size = 1) +
+  geom_line(aes(y = Inzidenz_7T_RKI, color = "RKI"), linetype = 2, size = 1) +
+  scale_color_manual(
+    values = c("LAGeSo" = "red", "RKI" = "blue"),
+    guide = guide_legend(title = NULL)
+  ) +
+  ylab("7-Tage-Inzidenz") +
+  # Zeige letzte 14 Tage
+  coord_cartesian(xlim = c(max(Vergleich_Faelle$Meldedatum)-14, NA)) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+Zum Vergleich erhählt man alle vom RKI in Lageberichten veröffentlichten 7-Tage-Inzidenzen in dieser [Excel-Datei (Arbeitsblatt BL_7-Tage-Inzidenz)](https://www.rki.de/DE/Content/InfAZ/N/Neuartiges_Coronavirus/Daten/Fallzahlen_Kum_Tab.html).
+
+## Verwendung des Berichtsdatums zur Berechnung der 7-Tage-Inzidenz
+
+Eine weitere Alternative, welche von einigen Medien verwendet wird, ist die Berechnung der 7-Tage-Inzidenz auf Basis des Berichtsdatums (also der täglich berichteten Zahl neuer Fälle, siehe Erklärung oben). Durch den Datenschluss um 12 Uhr wird hier ein um 12 Stunden verschobenes 7-Tage-Intervall verwendet. Zusätzlich werden bei dieser Art der Berechnung Fälle berücksichtigt, welche, durch Nachmeldung, vom Meldedatum vor den letzten 7 Tagen liegen und somit nicht mehr Teil des aktuellen Infektionsgeschehens sind. Praktisch wird eine um 12h in die Zukunft verschobene Inzidenz berechnet.
+
