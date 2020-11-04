@@ -12,15 +12,15 @@ output:
 ---
 
 # Einleitung
-Im Folgenden wird die Berechnung der 7-Tage-Inzidenz für Berlin durch das LAGeSo und das RKI erklärt. Für die gezeigte Berechnung werden nur öffentlich zugängliche Datenquellen verwendet, damit jeder Schritt selbständig nachvollzogen werden kann. 
+Im Folgenden wird die Berechnung der COVID-19 7-Tage-Inzidenz für Berlin durch das LAGeSo und das RKI erklärt. Für die gezeigte Berechnung werden nur öffentlich zugängliche Datenquellen verwendet, damit jeder Schritt selbständig nachvollzogen werden kann. 
 
 Diese HTML-Datei (.nb.html) kann direkt in RStudio geöffnet und ausgeführt werden, um die Berechnungen mit aktuellen Daten durchzuführen.
 
 # Datumsangaben
-Jeder gemeldete Fall besitzt drei verschiedene Datumsangaben:
+Jeder gemeldete Fall am LAGeSo besitzt drei verschiedene Datumsangaben:
 
 1. Erkrankungsdatum: Dieses Datum wird durch die Gesundheitsämter erfragt und spiegelt das Datum der ersten Symptome eines Falles wieder. Mithilfe des Erkrankungsdatums kann der Ansteckungszeitpunkt genauer abgeschätzt werden. Es ist häufig bei der Erstübermittlung des Falles noch nicht vorhanden. Bei asymptomatischen Fällen gibt es kein Erkrankungsdatum und bei manchen Fällen kann das Erkrankungsdatum nicht ermittelt werden.
-2. Meldedatum: Als Meldedatum wird in der, vom Robert Koch-Institut (RKI) zur Verfügung gestellten, elektronischen Software „SurvNet\@RKI“, die in Berlin von allen Gesundheitsämtern verwendet wird, standardmäßig das aktuelle Datum bei Anlegen des Falles eingesetzt. In einigen Fällen wird dieses Datum jedoch, auf das Datum an dem das Gesundheitsamt die Meldung erhalten hat, geändert.
+2. Meldedatum: Als Meldedatum wird in der, vom Robert Koch-Institut (RKI) zur Verfügung gestellten, elektronischen Software „SurvNet\@RKI“, die in Berlin von allen Gesundheitsämtern verwendet wird, standardmäßig das aktuelle Datum bei Anlegen des Falles beim Gesundheitsamt eingesetzt. In einigen Fällen wird dieses Datum jedoch, auf das Datum an dem das Gesundheitsamt die Meldung erhalten hat, geändert.
 3. Berichtsdatum: Das Berichtsdatum ist das Datum des Datenstandes des Lageberichts des LAGeSo. Dieses Datum kann sich vom Meldedatum unterscheiden.
 
 Eine ausführlichere Erklärung finden Sie im Info-Tab unseres [Lageberichts.](https://www.berlin.de/corona/lagebericht/desktop/corona.html#info)
@@ -96,10 +96,10 @@ Vergleich_Faelle %>%
     Faelle_7Tage_LAGeSo = zoo::rollsumr(Faelle_LAGeSo, k = 7, na.pad = TRUE),
     Faelle_7Tage_RKI    = zoo::rollsumr(Faelle_RKI,    k = 7, na.pad = TRUE, na.rm = TRUE),
   ) -> Vergleich_Faelle
-Vergleich_Faelle
+Vergleich_Faelle %>% arrange(desc(Meldedatum))
 ```
 
-
+Man sieht, dass die Fallzahlen zwischen LAGeSo und dem RKI nahe dem "jetzt" erheblich abweichen können. Geht man aber einige Tage zurück sind die Fallzahlen identisch. 
 
 
 ### Vergleich der 7-Tage-Fallzahl
@@ -162,6 +162,8 @@ Im Vergleich mit unseren [älteren Lageberichten](http://web.archive.org/web/*/w
 |RKI   |   |+  |+  |+  |+  |+  |+  |+    |
 
 Das RKI berechnet die 7-Tage-Inzidenz unter Verwendung der Fallzahlen des neuesten Meldedatums, für das Daten vorliegen. Dies führt zu einer aktuelleren Inzidenz, welche jedoch stärker nachträglichen Korrekturen unterliegt. Dieser Unterschied ist sichtbar, wenn dieses Skript am frühen Abend ausgeführt wird (siehe folgende Abbildung).
+
+Dem RKI liegen durch die Übermittlung vom LAGeSo an das RKI zwischen 12-13 Uhr, für das neueste vorliegende Meldedatum nur die gemeldeten Fälle in Berlin bis 12 Uhr vor. Da dieser Tag trotzdem in die Inzidenzberechnung eingeht, wird für Berlin quasi eine 6,5 Tage Inzidenz berechnet.
 
 ## Erklärung zu den Einwohner\*innenzahlen
 
