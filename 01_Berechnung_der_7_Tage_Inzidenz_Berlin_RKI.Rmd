@@ -74,6 +74,8 @@ Auch bei diesem Datensatz müssen wir die Fallzahlen nach Meldedatum für Berlin
 RKI_Fallzahlen_in_Deutschland %>% 
   # Nur die Fälle aus Berlin verwenden
   filter(Bundesland == "Berlin") %>%
+  # Siehe Datensatzbeschreibung des RKI
+  filter(NeuerFall %in% 0:1) %>%
   # Zusammenfassen der Bezirke
   group_by(Meldedatum) %>%
   summarise(Faelle_RKI = sum(AnzahlFall)) %>%
@@ -163,8 +165,6 @@ Im Vergleich mit unseren [älteren Lageberichten](http://web.archive.org/web/*/w
 
 Das RKI berechnet die 7-Tage-Inzidenz unter Verwendung der Fallzahlen des neuesten Meldedatums, für das Daten vorliegen. Dies führt zu einer aktuelleren Inzidenz, welche jedoch stärker nachträglichen Korrekturen unterliegt. Dieser Unterschied ist sichtbar, wenn dieses Skript am frühen Abend ausgeführt wird (siehe folgende Abbildung).
 
-Dem RKI liegen durch die Übermittlung vom LAGeSo an das RKI zwischen 12-13 Uhr, für das neueste vorliegende Meldedatum nur die gemeldeten Fälle in Berlin bis 12 Uhr vor. Da dieser Tag trotzdem in die Inzidenzberechnung eingeht, wird für Berlin quasi eine 6,5 Tage Inzidenz berechnet.
-
 ## Erklärung zu den Einwohner\*innenzahlen
 
 Das LAGeSo verwendet die [Einwohner\*innenregisterstatistik vom 31.12.2019](https://www.statistik-berlin-brandenburg.de/BasisZeitreiheGrafik/Bas-Einwohnerregister.asp?Ptyp=300&Sageb=12041&creg=BBB&anzwer=10) (Quelle: Amt für Statistik Berlin-Brandenburg), nach der Berlin 3.769.495 Einwohner\*innen hat. Das RKI verwendet eine Einwohner\*innenzahl von 3.669.491 für die Berechnung von Inzidenzen.
@@ -201,3 +201,7 @@ Zum Vergleich erhählt man alle vom RKI in Lageberichten veröffentlichten 7-Tag
 
 Eine weitere Alternative, welche von einigen Medien verwendet wird, ist die Berechnung der 7-Tage-Inzidenz auf Basis des Berichtsdatums (also der täglich berichteten Zahl neuer Fälle, siehe Erklärung oben). Durch den Datenschluss um 12 Uhr wird hier ein um 12 Stunden verschobenes 7-Tage-Intervall verwendet. Zusätzlich werden bei dieser Art der Berechnung Fälle berücksichtigt, welche, durch Nachmeldung, vom Meldedatum vor den letzten 7 Tagen liegen und somit nicht mehr Teil des aktuellen Infektionsgeschehens sind. Praktisch wird eine um 12h in die Zukunft verschobene Inzidenz berechnet.
 
+# Contributions
+
+* [Michael Hoehle](https://github.com/hoehleatsu)
+* [Sebastian Meyer](https://github.com/bastistician)
